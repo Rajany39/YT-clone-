@@ -28,34 +28,34 @@ const register = async (req , res ) =>{
         let reqbody = req.body
         let {fullname , email ,username , password } = reqbody
         if ([fullname, email, username, password].some((fields) => fields?.trim() === "")) {
+            throw new ApiError(400, "username or email is required")
             
-            throw new CustomAPIError.BadRequestError(
-                "bad request",
-                StatusCodes.
-                BAD_REQUEST
-            );
         }
         const existedUser = await User.findOne({
             $or : [{username} ,{ email }]
         })
         if(existedUser){
-             return insertError("Email or User already existed", StatusCodes.err, res);
-        }
+            throw new ApiError(400, "Email or User already existed")
+         }
         console.log(existedUser);
+
         const avatarLocalPath =  req.files?.avatar[0]?.path
         if(!avatarLocalPath){
-             return insertError("Avatar file is required", StatusCodes.err, res);
+            throw new ApiError(400, "Avatar file is required")
+
         }
 
         const coverImageLocalPath =  req.files?.coverImage[0]?.path
         if(!coverImageLocalPath){
-             return insertError("CoverImageLocalPath file is required", StatusCodes.err, res);
+            throw new ApiError(400, "CoverImageLocalPath file is required")
+
         }
         
         const avatar = await uploadCloudinary(avatarLocalPath)
         if(!avatar){
-             return insertError("Avatar image  is upload in avatar", StatusCodes.err, res);
+            throw new ApiError(400, "Avatar image  is upload in avatar")
         }
+        
         const coverImage = await uploadCloudinary(coverImageLocalPath)
         const user = await User.create({
             fullname ,
@@ -72,8 +72,10 @@ const register = async (req , res ) =>{
         )
 
         if(!createdUser){
-            return insertError("Something went wrong", 500 , res);
+            throw new ApiError(400, "Something went wrong")
+
         }
+
         return insertSuccess("successfull",200,res)
         
         
@@ -114,7 +116,7 @@ const loginUser = async (req, res) => {
 
 
         const loggedIsUser = await User.findById(user._id).select(-password -refreshToken)
-        console.log(username , "username");
+        console.log(loggedIsUser , "username");
 
         
         // cookie is by default modifed any one in fronted when you can use httponly & secure 
@@ -166,5 +168,120 @@ const logoutUser = async (req , res) =>{
     }
 }
 
+const changesCurrentPassword = asyncHandler(async(req,res)=>{
+    try {
+        const {oldPassword , newPassword} = req.body
+        const user = await User.findById(req.user._id)
+        const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+        if(!isPasswordCorrect){
+            throw new ApiError(400,'Password is not right')
+        }
 
-module.exports = {register , loginUser , logoutUser}
+        user.password = newPassword
+       await user.save({validateBeforeSave:false})
+        return res.status(200).
+        json(new ApiResponse(200 , {} ,'Password Changed Successfully'))
+    } catch (error) {
+        return insertError("Unsuccessfull",StatusCodes.err,res)
+        
+    }
+})
+
+
+const currentUser = asyncHandler(async(req , res)=>{
+    try {
+        return res
+        .status(200)
+        .json(200 , req.user , 'current user is fetched successfully')
+    } catch (error) {
+        throw new ApiError(401, error?.message || "current User in not found ")
+    }
+})
+
+const updateAccountDetails = asyncHandler(async(req , res)=>{
+    try {
+        const {fullname , email} = req.body
+        const user = await User.findByIdAndUpdate(req.user._id ,
+        {
+            $set :{
+                fullname : fullname ,
+                email : email
+            }
+        },
+        {new : true}) // wo bhi update hoga use value dikh ke aayega 
+
+        return res.status(200).
+        json(new ApiResponse((200), user , 'Update fullname or email is successfully'))
+    } catch (error) {
+        throw new ApiError(401, error?.message || "fullname or email is not update")
+        
+    }
+})
+
+const uploadCoverImage = asyncHandler(async(req , res)=>{
+    try {
+        const coverImageLocalPath = req.file?.path
+        if(!coverImageLocalPath){
+            throw new ApiError(400,'coverImageLocalPath file is missing')
+        }
+
+        const coverImage = await uploadCloudinary(coverImageLocalPath)
+        if(!coverImage.url){
+            throw new ApiError(400,'Error while uploading in coverImage')
+        }
+
+        const user = await User.findByIdAndUpdate(user._id ,
+        {
+            $set :{
+                coverImage : coverImage.url
+            }
+        }.select("-password") ,
+        {new : true})
+
+        return res.status(200)
+        .json(new ApiResponse(200 , user , 'CoverImage update is successfully'))
+
+    } catch (error) {
+        throw new ApiError(401, error?.message || "CoverImage is not update")
+    }
+})
+
+const updateAvatar = asyncHandler(async(req , res)=>{
+    try {
+        const avatarLocalPath = req.file?.path
+        if(!avatarLocalPath){
+            throw new ApiError(400,'avatar file is missing')
+        }
+
+        const avatar = await uploadCloudinary(avatarLocalPath)
+        if(!avatar.url){
+            throw new ApiError(400,'Error while uploading in avatar')
+        }
+
+        const user = await User.findByIdAndUpdate(user._id ,
+        {
+            $set :{
+                avatar : avatar.url
+            }
+        }.select("-password") ,
+        {new : true})
+
+        return res.status(200)
+        .json(new ApiResponse(200 , user , 'Avatar update is successfully'))
+
+    } catch (error) {
+        throw new ApiError(401, error?.message || "Avatar is not update")
+    }
+})
+
+module.exports = 
+{    register ,
+     loginUser , 
+     logoutUser , 
+     changesCurrentPassword ,
+     currentUser ,
+     updateAccountDetails ,
+     updateAvatar ,
+     uploadCoverImage
+    
+}
