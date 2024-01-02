@@ -15,7 +15,7 @@ const userRouter = require('./src/routes/route.routes')
 app.use('/api/v1',userRouter)
 
 
-mongoose.connect("mongodb+srv://yadavritik9324:yadavritik9324@cluster0.3g15ivg.mongodb.net/?retryWrites=true&w=majority")
+mongoose.connect(process.env.MONGO_DB)
 .then(()=>{
     console.log('the database is connected');
 })
